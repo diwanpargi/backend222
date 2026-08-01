@@ -1,6 +1,8 @@
 import { asynchandler } from "../utils/asynchandeler.js"
 import {ApiError} from "../utils/apierror.js"
 import {User, USER} from "../models/user.models.js"
+import { uploadoncloudinary } from "../utils/claudinery.js"
+import { ApiResponse } from "../utils/Apiresponse.js"
 
 const registerUser= asynchandler( async (req,res)=>{
    
@@ -29,13 +31,19 @@ const registerUser= asynchandler( async (req,res)=>{
         
     }
     const avatarLocalPath= req.files?.avatar[0]?.path 
-    const coverImage= req.files?.coverImage[0]?.path
+    const coverImagelocalPath= req.files?.coverImage[0]?.path
     if(!avatarLocalPath){
         throw new ApiError("avatar file is required",400);
-        
+        }
+
+        const avatar=await uploadoncloudinary(avatarLocalPath)
+        const coverImage=await uploadoncloudinary(coverImagelocalPath)
+    if (!avatar) {
+        throw new ApiError("avatar file is required",400);
     }
 
-    User.create({
+     
+  const user = await User.create({
         fullname,
         avatar:avatar.url,
         coverImage:coverImage?.url || " ",
@@ -43,6 +51,18 @@ const registerUser= asynchandler( async (req,res)=>{
         password,
         username:username.toLowerCase()
     })
+  const createduser = await User.findById(user._id).select(
+    "-password -refreshtoken"
+  )
+  if(!createduser){
+    throw new ApiError("somthing went wrong while registering user");
+    
+  }
+
+  return res.status(201).json(
+    new ApiResponse(200,createduser,"user registered successfully")
+  )
+
 })
   
 export { registerUser }
