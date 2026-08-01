@@ -32,7 +32,7 @@ const userSchema=new mongoose.Schema(
             required:true,
            
         },
-        avatar:{
+        coverImage:{
             type:String,//cloudinary
          },
          watchhistory:[
