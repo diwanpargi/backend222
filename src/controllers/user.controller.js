@@ -1,6 +1,6 @@
 import { asynchandler } from "../utils/asynchandeler.js"
 import {ApiError} from "../utils/apierror.js"
-import {User, USER} from "../models/user.models.js"
+import { User } from "../models/user.models.js"
 import { uploadoncloudinary } from "../utils/claudinery.js"
 import { ApiResponse } from "../utils/Apiresponse.js"
 
@@ -19,27 +19,39 @@ const registerUser= asynchandler( async (req,res)=>{
     const {fullname,email,username,password }=req.body
     console.log("email:",email);
     if([fullname,email,username,password].some((field)=> field?.trim() === "")){
-        throw new ApiError("All fields are required",400)
+        throw new ApiError(400, "All fields are required");
     }
 
-    const existedUSER=User.findOne({
+    const existedUSER=await User.findOne({
         $or:[{ username },{ email }]
     })
     if (existedUSER) {
-        throw new ApiError("user with email or username already exist",409);
+        throw new ApiError(409,"user with email or username already exist");
         
         
     }
+     
+    
+    //console.log(req.files);
+    
     const avatarLocalPath= req.files?.avatar[0]?.path 
-    const coverImagelocalPath= req.files?.coverImage[0]?.path
+    //const coverImagelocalPath= req.files?.coverImage[0]?.path
+ 
+    let coverImagelocalPath;
+
+    if(req.files && Array.isArray(req.files.coverImage)&& req.files.coverImage.length >0){
+      coverImagelocalPath=req.files.coverImage[0].path
+    }
+
+
     if(!avatarLocalPath){
-        throw new ApiError("avatar file is required",400);
+        throw new ApiError(400,"avatar file is required");
         }
 
         const avatar=await uploadoncloudinary(avatarLocalPath)
         const coverImage=await uploadoncloudinary(coverImagelocalPath)
     if (!avatar) {
-        throw new ApiError("avatar file is required",400);
+        throw new ApiError(400,"avatar file is required");
     }
 
      
@@ -55,7 +67,7 @@ const registerUser= asynchandler( async (req,res)=>{
     "-password -refreshtoken"
   )
   if(!createduser){
-    throw new ApiError("somthing went wrong while registering user");
+    throw new ApiError(500, "Something went wrong while registering user");
     
   }
 
