@@ -4,20 +4,28 @@ import { User } from "../models/user.models.js";
 import { uploadoncloudinary } from "../utils/claudinery.js";
 import { ApiResponse } from "../utils/Apiresponse.js";
 import { use } from "react";
+import jwt from "jsonwebtoken"
 
 const generateAccessAndRefreshToken = async (userId) => {
   try {
     const user = await User.findById(userId);
+   
+    
     const acesstoken = user.generateAccessToken();
+ 
+    
     const refreshtoken = user.generateRefreshToken();
-
+    
+     
     user.refreshtoken = refreshtoken;
     await user.save({ validateBeforeSave: false });
     return { acesstoken, refreshtoken };
   } catch (error) {
+    console.log("actual error : ",error);
+    
     throw new ApiError(
       500,
-      "something went wrong while generating refresh token and accesss token"
+      "something went wrong while generating refresh token and accesss token",error
     );
   }
 };
@@ -102,8 +110,9 @@ const loginUser = asynchandler(async function (req, res) {
   //send cookie
 
   const { email, username, password } = req.body;
+   console.log(email);
 
-  if (!username || !email) {
+  if (!username && !email) {
     throw new ApiError(400, "username or email is required");
   }
   const user = await User.findOne({
@@ -119,12 +128,12 @@ const loginUser = asynchandler(async function (req, res) {
     throw new ApiError(401, "user password not correct ");
   }
 
-  const { accesstoken, refreshtoken } = await generateAccessAndRefreshToken(
+  const { acesstoken, refreshtoken } = await generateAccessAndRefreshToken(
     user._id
   );
 
   const loggedinuser = await User.findById(user._id).select(
-    "-password -refreshtoken"
+    "-password -refreshtoken "
   );
   const options = {
     httpOnly: true,
@@ -133,14 +142,14 @@ const loginUser = asynchandler(async function (req, res) {
 
   return res
     .status(200)
-    .cookie("accesstoken", accesstoken, options)
+    .cookie("accesstoken", acesstoken, options)
     .cookie("refreshtoken", refreshtoken, options)
     .json(
       new ApiResponse(
         200,
         {
           user: loggedinuser,
-          accesstoken,
+          acesstoken,
           refreshtoken,
         },
         "user logged in successfully"
@@ -157,7 +166,10 @@ const logoutUser = asynchandler(async (req, res) => {
     {
       $set:{
         refreshtoken :undefined
-      }
+      },
+    },
+    {
+     new:true,
     }
   )
 
@@ -173,4 +185,73 @@ const options = {
 
   )
 });
-export { registerUser, loginUser, logoutUser };
+
+const ResetPassword= asynchandler( async (req,res)=>{
+  const {password}=req.body;
+  
+  req.user.password=password;
+
+  await req.user.save();
+
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+   return res 
+  .status(200)
+  .clearCookie("accesstoken",options)
+  .clearCookie("refreshtoken",options)
+  .json(new ApiResponse(200,{},"Password changed successfully"))
+
+});
+
+const refreshAccessToken=asynchandler( async(req,res)=>{
+
+ const incomingRefreshToken= req.cookies.refreshtoken || req.body.refreshtoken
+
+ if(!incomingRefreshToken){
+  throw new ApiError(401,"unauthorized request");
+  
+ }
+ try {
+  const decodedtoken= jwt.verify(
+   incomingRefreshToken,
+   process.env.REFRESH_TOKEN_EXPIRY
+  )
+ 
+  const user=await User.findById(decodedtoken?._id)
+ 
+  if(!user){
+   throw new ApiError(401,"invalid refresh token")
+  }
+ 
+  if (incomingRefreshToken !==user?.refreshtoken) {
+    throw new ApiError(401,"refresh token is expired")
+  }
+ 
+  const options = {
+     httpOnly: true,
+     secure: true,
+   };
+ 
+  const {acesstoken,newrefreshtoken}= await generateAccessAndRefreshToken(user._id)
+ 
+   return res
+   .status(200)
+   .cookie("accesstoken",acesstoken,options)
+   .cookie("refreshtoken",newrefreshtoken,options)
+   .json(
+     new ApiResponse(
+       200,
+       {accesstoken,refreshtoken,newrefreshtoken},
+       "Access token refreshed"
+     )
+   )
+ } catch (error) {
+  throw new ApiError(401,"invalid refresh token")
+ }
+
+});
+
+
+export { registerUser, loginUser, logoutUser ,ResetPassword,refreshAccessToken};
